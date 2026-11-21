@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -374,7 +374,7 @@
   function moneyView(st) {
     const sold = S.drinks.filter((d) => st.sold[d.id]);
     const hist = sortedLog();
-    const stale = S.log.length > 10 && Date.now() - (S.settings.lastBackup || 0) > 14 * 86400000;
+    const stale = backupDue();
     return [
       h('section', { class: 'kitty' }, h('span', null, 'In the kitty'), h('strong', null, money(st.fund)),
         h('small', null, 'Cash + PayID received, minus money spent')),
@@ -629,6 +629,19 @@
       h('button', { class: 'btn danger wide', onclick: () => { close(); eraseSheet(); } }, 'Erase everything'),
       h('p', { class: 'small' }, 'Stock tracker v' + VERSION + '. Your data is stored only on this phone, encrypted. Nothing is sent anywhere.')));
   }
+  const FORTNIGHT = 14 * 86400000;
+  const backupDue = () => S.log.length > 0 && Date.now() - Math.max(S.settings.lastBackup || 0, S.created || 0) > FORTNIGHT;
+  function backupReminder() {
+    // Shown at most once every 2 weeks, whatever she taps.
+    if (!S || !backupDue() || Date.now() - (S.settings.lastReminder || 0) < FORTNIGHT) return;
+    S.settings.lastReminder = Date.now(); save();
+    const last = S.settings.lastBackup;
+    const days = Math.floor((Date.now() - (last || S.created || 0)) / 86400000);
+    openSheet('Time to back up', (close) => h('div', { class: 'stack' },
+      h('p', { class: 'small' }, (last ? 'Your last backup was ' + days + ' days ago.' : 'You haven’t made a backup yet.') + ' Your records only live on this phone, so save a copy to Files or iCloud Drive in case the app is ever deleted.'),
+      h('button', { class: 'btn primary wide', onclick: async () => { close(); await exportBackup(); } }, 'Back up now'),
+      h('button', { class: 'btn ghost wide', onclick: close }, 'Not now')));
+  }
   async function exportBackup() {
     await saveChain;
     const text = localStorage.getItem(VAULT_KEY);
@@ -758,6 +771,7 @@
         session = { key, salt, iter: vault.iter }; S = migrate(data); view = 'sell';
         if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
         render(true);
+        backupReminder();
       } catch {
         const lk = getLockout(); lk.fails += 1;
         if (lk.fails >= 5) lk.until = Date.now() + Math.min(3600000, 30000 * 2 ** (lk.fails - 5));
