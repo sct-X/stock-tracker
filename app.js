@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -14,7 +14,7 @@
     { name: 'Red Bull', size: '250mL', price: 300, color: '#8AB4F8' },
     { name: 'Monster Mango Loco', size: '500mL', price: 450, color: '#6FD3C8' },
   ];
-  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Money', drinks: 'Drinks' };
+  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Money', history: 'History', drinks: 'Drinks' };
 
   /* ---------- helpers ---------- */
   const $ = (s, r = document) => r.querySelector(s);
@@ -39,6 +39,7 @@
     people: [['circle', { cx: 9, cy: 8, r: 3.5 }], ['path', { d: 'M2.5 20a6.5 6.5 0 0 1 13 0' }], ['circle', { cx: 17.5, cy: 9, r: 2.5 }], ['path', { d: 'M16.5 14.2A5 5 0 0 1 21.5 19.5' }]],
     wallet: [['rect', { x: 3, y: 6, width: 18, height: 14, rx: 2.5 }], ['path', { d: 'M3 10h18M7 3.5h10' }], ['circle', { cx: 16.5, cy: 15, r: 1.2 }]],
     box: [['path', { d: 'M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z' }], ['path', { d: 'M3.5 7.5 12 11.5l8.5-4M12 11.5v9' }]],
+    clock: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 7v5l3.2 2' }]],
     trash: [['path', { d: 'M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13' }]],
   };
   function icon(name) {
@@ -72,7 +73,9 @@
     const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
     if (t >= startOfToday()) return 'Today ' + time;
     if (t >= startOfToday() - 86400000) return 'Yesterday ' + time;
-    return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + time;
+    const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString('en-AU', opts) + ' ' + time;
   }
 
   /* ---------- crypto ---------- */
@@ -201,7 +204,7 @@
           h('button', { class: 'icon-btn', onclick: lockNow, 'aria-label': 'Lock' }, icon('lock')),
           h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, icon('gear'))))),
       h('main', { class: 'main' }, VIEWS[view](st)),
-      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['money', 'Money', 'wallet'], ['drinks', 'Drinks', 'box']].map(([v, label, ic]) =>
+      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock'], ['drinks', 'Drinks', 'box']].map(([v, label, ic]) =>
         h('button', { class: view === v ? 'on' : '', onclick: () => { view = v; histLimit = 40; render(true); } }, icon(ic), label))));
     window.scrollTo(0, resetScroll ? 0 : y);
   }
@@ -341,10 +344,12 @@
       default: return { title: e.type, sub: '', amt: '', cls: 'dim' };
     }
   }
-  function historyRow(e, before) {
+  function historyRow(e, before, timeOnly) {
     const x = describe(e);
+    const stamp = timeOnly ? timeOf(e.t) : when(e.t);
     return h('div', { class: 'li' },
-      h('span', { class: 'grow' }, h('span', { class: 't' }, x.title), h('span', { class: 's' }, x.sub + ' · ' + when(e.t))),
+      h('button', { class: 'grow', onclick: () => { if (before) before(); openEntry(e); } },
+        h('span', { class: 't' }, x.title), h('span', { class: 's' }, x.sub + ' · ' + stamp)),
       x.amt ? h('span', { class: 'amt ' + x.cls }, x.amt) : null,
       h('button', { class: 'del', 'aria-label': 'Delete entry', onclick: async () => {
         if (before) before();
@@ -353,7 +358,7 @@
   }
   function moneyView(st) {
     const sold = S.drinks.filter((d) => st.sold[d.id]);
-    const hist = S.log.slice().reverse();
+    const hist = sortedLog();
     const stale = S.log.length > 10 && Date.now() - (S.settings.lastBackup || 0) > 14 * 86400000;
     return [
       h('section', { class: 'kitty' }, h('span', null, 'In the kitty'), h('strong', null, money(st.fund)),
@@ -372,10 +377,146 @@
       sold.length ? h('div', { class: 'list' }, sold.map((d) => h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name + (d.archived ? ' (hidden)' : '')), h('span', { class: 's' }, st.sold[d.id] + ' sold')),
         h('span', { class: 'amt' }, money(st.soldAmt[d.id] || 0))))) : h('p', { class: 'empty' }, 'No sales yet.'),
-      h('h3', { class: 'section' }, 'History'),
-      hist.length ? h('div', { class: 'list' }, hist.slice(0, histLimit).map((e) => historyRow(e))) : h('p', { class: 'empty' }, 'Nothing recorded yet.'),
-      hist.length > histLimit ? h('button', { class: 'btn ghost wide', onclick: () => { histLimit += 60; render(); } }, 'Show more') : null,
+      h('h3', { class: 'section' }, 'Recent'),
+      hist.length ? h('div', { class: 'list' }, hist.slice(0, 6).map((e) => historyRow(e))) : h('p', { class: 'empty' }, 'Nothing recorded yet.'),
+      hist.length ? h('button', { class: 'btn ghost wide', onclick: () => { view = 'history'; render(true); } }, 'Search full history →') : null,
     ];
+  }
+
+  /* ---------- History (searchable, by date) ---------- */
+  const sortedLog = () => S.log.slice().sort((a, b) => b.t - a.t);
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const dayKey = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  const timeOf = (t) => new Date(t).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  function dayLabel(t) {
+    if (t >= startOfToday()) return 'Today';
+    if (t >= startOfToday() - 86400000) return 'Yesterday';
+    return new Date(t).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  const TYPE_FILTERS = [['all', 'All'], ['sale', 'Sales'], ['pay', 'Tab payments'], ['cash', 'Cash in/out'], ['stock', 'Stock']];
+  const RANGES = [['all', 'All time'], ['today', 'Today'], ['week', 'Last 7 days'], ['month', 'This month'], ['custom', 'Pick dates']];
+  const HQ = { text: '', type: 'all', range: 'all', from: '', to: '' };
+  function searchText(e) {
+    const x = describe(e); const d = new Date(e.t);
+    return [x.title, x.sub, e.note, e.name, e.tabName, x.amt, e.amount != null ? money(e.amount) : '',
+      d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      d.toLocaleDateString('en-AU'), dayLabel(e.t)].filter(Boolean).join(' ').toLowerCase();
+  }
+  function filteredLog() {
+    let lo = -Infinity, hi = Infinity;
+    const now = new Date();
+    if (HQ.range === 'today') lo = startOfToday();
+    else if (HQ.range === 'week') lo = startOfToday() - 6 * 86400000;
+    else if (HQ.range === 'month') lo = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    else if (HQ.range === 'custom') {
+      if (HQ.from) lo = new Date(HQ.from + 'T00:00:00').getTime();
+      if (HQ.to) hi = new Date(HQ.to + 'T00:00:00').getTime() + 86400000 - 1;
+    }
+    const words = HQ.text.toLowerCase().split(/\s+/).filter(Boolean);
+    return sortedLog().filter((e) => {
+      if (e.t < lo || e.t > hi) return false;
+      if (HQ.type === 'sale' && e.type !== 'sale') return false;
+      if (HQ.type === 'pay' && e.type !== 'pay') return false;
+      if (HQ.type === 'cash' && e.type !== 'cashout' && e.type !== 'cashin') return false;
+      if (HQ.type === 'stock' && e.type !== 'restock' && e.type !== 'adjust') return false;
+      if (words.length) { const s = searchText(e); if (!words.every((w) => s.includes(w))) return false; }
+      return true;
+    });
+  }
+  function historyView() {
+    const results = h('div');
+    const search = h('input', { class: 'input', type: 'search', placeholder: 'Search: name, drink, note, date…', value: HQ.text, autocomplete: 'off', enterKeyHint: 'search' });
+    search.addEventListener('input', () => { HQ.text = search.value; histLimit = 40; fillResults(results); });
+    const chipRow = (opts, key) => h('div', { class: 'chips' }, opts.map(([v, l]) =>
+      h('button', { class: 'chip' + (HQ[key] === v ? ' on' : ''), onclick: () => { HQ[key] = v; histLimit = 40; render(); } }, l)));
+    const dateIn = (key) => {
+      const i = h('input', { class: 'input', type: 'date', value: HQ[key] });
+      i.addEventListener('change', () => { HQ[key] = i.value; fillResults(results); });
+      return i;
+    };
+    fillResults(results);
+    return [
+      search,
+      h('div', { class: 'label' }, 'When'), chipRow(RANGES, 'range'),
+      HQ.range === 'custom' ? h('div', { class: 'row2 dates' }, field('From', dateIn('from')), field('To', dateIn('to'))) : null,
+      h('div', { class: 'label' }, 'Type'), chipRow(TYPE_FILTERS, 'type'),
+      results,
+    ];
+  }
+  function fillResults(box) {
+    const list = filteredLog();
+    let sales = 0, sold = 0, moneyIn = 0, moneyOut = 0;
+    for (const e of list) {
+      if (e.type === 'sale') { sales += e.amount; sold += e.qty; if (!e.tabId) moneyIn += e.amount; }
+      else if (e.type === 'pay' || e.type === 'cashin') moneyIn += e.amount;
+      else if (e.type === 'cashout') moneyOut += e.amount;
+    }
+    const kids = [
+      h('div', { class: 'stats' },
+        h('div', { class: 'stat' }, h('span', { class: 'k' }, list.length + (list.length === 1 ? ' entry · ' : ' entries · ') + sold + (sold === 1 ? ' drink sold' : ' drinks sold')), h('b', null, money(sales) + ' sales')),
+        h('div', { class: 'stat' }, h('span', { class: 'k' }, 'Money in / out'), h('b', null, h('span', { class: 'in' }, '+' + money(moneyIn)), ' ', h('span', { class: 'out' }, '−' + money(moneyOut))))),
+    ];
+    if (!list.length) kids.push(h('p', { class: 'empty' }, S.log.length ? 'Nothing matches. Try another search or date range.' : 'Nothing recorded yet.'));
+    let curKey = null, group = null;
+    for (const e of list.slice(0, histLimit)) {
+      const k = dayKey(e.t);
+      if (k !== curKey) {
+        curKey = k;
+        const day = list.filter((x) => dayKey(x.t) === k);
+        const dSold = day.reduce((n, x) => n + (x.type === 'sale' ? x.qty : 0), 0);
+        const dSales = day.reduce((n, x) => n + (x.type === 'sale' ? x.amount : 0), 0);
+        kids.push(h('div', { class: 'day-head' }, h('span', null, dayLabel(e.t)), h('span', null, dSold ? dSold + ' sold · ' + money(dSales) : '')));
+        group = h('div', { class: 'list' }); kids.push(group);
+      }
+      group.append(historyRow(e, null, true));
+    }
+    if (list.length > histLimit) kids.push(h('button', { class: 'btn ghost wide', onclick: () => { histLimit += 60; fillResults(box); } }, 'Show more'));
+    if (list.length) kids.push(h('button', { class: 'btn wide csv', onclick: () => exportCSV(list) }, 'Export ' + (list.length === 1 ? 'this entry' : 'these ' + list.length + ' entries') + ' (CSV)'));
+    box.replaceChildren(...kids);
+  }
+  function toLocalInput(t) { const d = new Date(t); return dayKey(t) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function openEntry(e) {
+    const x = describe(e);
+    const dt = h('input', { class: 'input', type: 'datetime-local', value: toLocalInput(e.t), max: toLocalInput(Date.now()) });
+    const hasNote = e.type === 'cashout' || e.type === 'cashin' || e.type === 'pay';
+    const note = h('input', { class: 'input', value: e.note || '', placeholder: 'Optional', autocomplete: 'off', maxLength: 80 });
+    const err = h('p', { class: 'err' });
+    openSheet(x.title, (close) => h('div', { class: 'stack' },
+      h('div', { class: 'balance-big' }, h('span', { class: 'k' }, x.sub), x.amt ? h('b', { class: x.cls === 'pos' ? 'cred' : x.cls === 'neg' ? 'owe' : '' }, x.amt) : null,
+        h('span', { class: 'small' }, new Date(e.t).toLocaleString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' }))),
+      field('Date and time', dt),
+      hasNote ? field('Note', note) : null,
+      err,
+      h('button', { class: 'btn primary wide', onclick: () => {
+        const t = new Date(dt.value).getTime();
+        if (!Number.isFinite(t)) { err.textContent = 'Pick a date and time.'; return; }
+        if (t > Date.now() + 60000) { err.textContent = 'That’s in the future.'; return; }
+        e.t = t; if (hasNote) e.note = note.value.trim() || null;
+        save(); close(); render(); toast('Entry updated');
+      } }, 'Save changes'),
+      h('button', { class: 'btn danger wide', onclick: async () => {
+        close();
+        if (await ask('Delete this entry?', x.title + ' — ' + when(e.t) + '. Totals will update.', 'Delete', true)) { removeEntry(e.id); toast('Entry deleted'); }
+      } }, 'Delete entry'),
+      h('p', { class: 'small' }, 'Change the date if you’re recording something that happened earlier, e.g. a payment from yesterday.')));
+  }
+  async function exportCSV(list) {
+    const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const TYPE = { sale: 'Sale', pay: 'Tab payment', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
+    const rows = [['Date', 'Time', 'Type', 'Item', 'Tab', 'Qty', 'Amount', 'Note']];
+    for (const e of list.slice().sort((a, b) => a.t - b.t)) {
+      const d = drinkById(e.drinkId); const t = tabById(e.tabId);
+      const amt = e.amount == null ? '' : ((e.type === 'cashout' ? -e.amount : e.amount) / 100).toFixed(2);
+      rows.push([dayKey(e.t), timeOf(e.t), TYPE[e.type] || e.type, d ? d.name : (e.name || ''), e.tabId ? (t ? t.name : e.tabName) : '', e.qty == null ? '' : e.qty, amt, e.note || '']);
+    }
+    const text = rows.map((r) => r.map(q).join(',')).join('\n');
+    const file = new File([text], 'stock-tracker-history-' + dayKey(Date.now()) + '.csv', { type: 'text/csv' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Stock tracker history' }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(file);
+    const a = h('a', { href: url, download: file.name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
   function cashSheet(type) {
     const out = type === 'cashout';
@@ -492,7 +633,7 @@
         h('button', { class: 'btn wide', onclick: setCount }, 'Set count'));
     });
   }
-  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, drinks: drinksView };
+  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView, drinks: drinksView };
 
   /* ---------- Settings ---------- */
   function openSettings() {

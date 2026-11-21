@@ -77,13 +77,13 @@ h1, h2, h3 { margin: 0; }
   left: 16px; right: 16px; bottom: var(--tabbar-gap);
   max-width: 520px; margin: 0 auto;
   height: 64px; border-radius: 32px;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: rgba(255,255,255,.86);
   -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
   box-shadow: 0 8px 30px rgba(45, 91, 166, .22), inset 0 0 0 1px rgba(255,255,255,.7);
   padding: 6px;
 }
-.tabbar button { border-radius: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.tabbar button { border-radius: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .tabbar button .ic { width: 23px; height: 23px; }
 .tabbar button.on { background: var(--blue-soft); color: var(--deep); }
 
@@ -233,3 +233,15 @@ button.li:active { background: #F4F8FF; }
 .lock-card { background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); display: grid; gap: 14px; }
 .lock-links { display: grid; gap: 4px; margin-top: 14px; }
 .lock-links .btn { min-height: 44px; font-size: 15px; }
+
+/* History */
+.li > button.grow { text-align: left; min-width: 0; }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 4px 8px; font-weight: 750; }
+.day-head span:last-child { font-size: 13px; color: var(--muted); font-weight: 650; }
+.stat b .in { color: var(--good); }
+.stat b .out { color: var(--bad); }
+.stat b { font-size: 18px; }
+.dates { margin-top: 4px; }
+.csv { margin-top: 16px; }
+input[type=search] { -webkit-appearance: none; appearance: none; }
+input[type=date], input[type=datetime-local] { -webkit-appearance: none; appearance: none; display: flex; align-items: center; }
