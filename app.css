@@ -245,3 +245,8 @@ button.li:active { background: #F4F8FF; }
 .csv { margin-top: 16px; }
 input[type=search] { -webkit-appearance: none; appearance: none; }
 input[type=date], input[type=datetime-local] { -webkit-appearance: none; appearance: none; display: flex; align-items: center; }
+
+.drink.add-drink { align-items: center; justify-content: center; gap: 6px; background: transparent; box-shadow: none; border: 2px dashed var(--blue-2); color: var(--deep); text-align: center; }
+.drink.add-drink::before { display: none; }
+.drink.add-drink .plus { width: 44px; height: 44px; border-radius: 22px; background: var(--blue-soft); display: grid; place-items: center; font-size: 28px; font-weight: 600; line-height: 1; }
+.drink.add-drink .dname { font-size: 16px; }

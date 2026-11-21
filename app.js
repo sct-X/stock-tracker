@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -225,8 +225,8 @@
       h('div', { class: 'chips' }, chip('Paid now', null), tabs.map((t) => chip(t.name, t.id, st.tabBal[t.id] || 0)),
         h('button', { class: 'chip add', onclick: () => newTab((id) => { chargeTo = id; render(); }) }, '+ Tab')),
       target ? h('div', { class: 'charge-note' }, 'Next drink goes on ' + target.name + '’s tab') : null,
-      drinks.length ? h('div', { class: 'grid' }, drinks.map((d) => drinkCard(d, st)))
-        : h('p', { class: 'empty' }, 'No drinks yet — add some on the Drinks page.'),
+      h('div', { class: 'grid' }, drinks.map((d) => drinkCard(d, st)),
+        h('button', { class: 'drink add-drink', onclick: () => editDrink(null) }, h('span', { class: 'plus' }, '+'), h('span', { class: 'dname' }, 'Add a drink'))),
       h('p', { class: 'hint' }, 'Tap a drink once for each one sold.'),
     ];
   }
