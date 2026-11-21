@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -204,7 +204,7 @@
           h('button', { class: 'icon-btn', onclick: lockNow, 'aria-label': 'Lock' }, icon('lock')),
           h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, icon('gear'))))),
       h('main', { class: 'main' }, VIEWS[view](st)),
-      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock'], ['drinks', 'Drinks', 'box']].map(([v, label, ic]) =>
+      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
         h('button', { class: view === v ? 'on' : '', onclick: () => { view = v; histLimit = 40; render(true); } }, icon(ic), label))));
     window.scrollTo(0, resetScroll ? 0 : y);
   }
@@ -555,22 +555,19 @@
   }
 
   /* ---------- Drinks ---------- */
-  function drinksView(st) {
+  function manageDrinks() {
+    const st = stats();
     const active = activeDrinks(); const hidden = S.drinks.filter((d) => d.archived);
-    return [
-      h('button', { class: 'btn primary wide', onclick: () => editDrink(null) }, '+ Add a drink'),
-      h('div', { class: 'label' }, 'On the sell page'),
-      active.length ? h('div', { class: 'list' }, active.map((d) => {
-        return h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
-          h('button', { class: 'grow', onclick: () => editDrink(d) },
-            h('span', { class: 't' }, d.name), h('span', { class: 's' }, [d.size, money(d.price), (st.sold[d.id] || 0) + ' sold'].filter(Boolean).join(' · '))),
-          h('button', { class: 'mini', onclick: () => editDrink(d) }, 'Edit'));
-      })) : h('p', { class: 'empty' }, 'No drinks on the sell page.'),
+    openSheet('Edit drinks', (close) => h('div', { class: 'stack' },
+      h('button', { class: 'btn primary wide', onclick: () => { close(); editDrink(null); } }, '+ Add a drink'),
+      active.length ? h('div', { class: 'list' }, active.map((d) => h('button', { class: 'li', onclick: () => { close(); editDrink(d); } },
+        h('span', { class: 'dot', style: { '--c': d.color } }),
+        h('span', { class: 'grow' }, h('span', { class: 't' }, d.name), h('span', { class: 's' }, [d.size, money(d.price), (st.sold[d.id] || 0) + ' sold'].filter(Boolean).join(' · '))),
+        h('span', { class: 'mini' }, 'Edit')))) : h('p', { class: 'empty' }, 'No drinks on the sell page.'),
       hidden.length ? [h('div', { class: 'label' }, 'Hidden'), h('div', { class: 'list' }, hidden.map((d) => h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name), h('span', { class: 's' }, (st.sold[d.id] || 0) + ' sold')),
-        h('button', { class: 'mini', onclick: () => { d.archived = false; save(); render(); } }, 'Show'))))] : null,
-      h('p', { class: 'hint' }, 'Tap a drink to change its name, size, price or colour.'),
-    ];
+        h('button', { class: 'mini', onclick: () => { d.archived = false; save(); close(); render(); toast(d.name + ' is back on the sell page'); } }, 'Show'))))] : null,
+      h('p', { class: 'small' }, 'Tap a drink to change its name, size, price or colour, reorder it, or hide it.')));
   }
   function editDrink(d) {
     const isNew = !d;
@@ -605,11 +602,11 @@
         h('button', { class: 'btn primary wide', onclick: go }, isNew ? 'Add drink' : 'Save'),
         isNew ? null : [
           h('div', { class: 'row2' }, h('button', { class: 'btn', onclick: () => move(-1) }, '↑ Move up'), h('button', { class: 'btn', onclick: () => move(1) }, '↓ Move down')),
-          h('button', { class: 'btn danger wide', onclick: () => { d.archived = true; save(); close(); render(); toast(d.name + ' hidden — bring it back from the Drinks page'); } }, 'Hide from sell page')],
+          h('button', { class: 'btn danger wide', onclick: () => { d.archived = true; save(); close(); render(); toast(d.name + ' hidden — bring it back in Settings → Edit drinks'); } }, 'Hide from sell page')],
         h('p', { class: 'small' }, 'Changing the price only affects new sales. Past sales keep the price they were sold at.'));
     });
   }
-  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView, drinks: drinksView };
+  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView };
 
   /* ---------- Settings ---------- */
   function openSettings() {
@@ -619,6 +616,7 @@
     const last = S.settings.lastBackup ? when(S.settings.lastBackup) : 'never';
     openSheet('Settings', (close) => h('div', { class: 'stack' },
       field('Lock the app', sel),
+      h('button', { class: 'btn wide', onclick: () => { close(); manageDrinks(); } }, 'Edit drinks'),
       h('button', { class: 'btn wide', onclick: () => { close(); changeCreds(); } }, 'Change number or passcode'),
       h('div', { class: 'sep' }),
       h('button', { class: 'btn primary wide', onclick: exportBackup }, 'Back up now'),
