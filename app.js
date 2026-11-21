@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.4.0';
+  const VERSION = '1.5.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -613,8 +613,8 @@
 
   /* ---------- Settings ---------- */
   function openSettings() {
-    const sel = h('select', { class: 'input', onchange: () => { S.settings.autoLock = Number(sel.value); save(); toast('Auto-lock updated'); } },
-      [[0, 'As soon as I leave the app'], [1, 'After 1 minute away'], [5, 'After 5 minutes away'], [15, 'After 15 minutes away'], [60, 'After 1 hour away']].map(([v, l]) =>
+    const sel = h('select', { class: 'input', onchange: () => { S.settings.autoLock = Number(sel.value); save(); keepSession(); toast('Auto-lock updated'); } },
+      [[0, 'As soon as I leave the app'], [1, 'After 1 minute away'], [5, 'After 5 minutes away'], [15, 'After 15 minutes away'], [60, 'After 1 hour away'], [1440, 'After 24 hours away']].map(([v, l]) =>
         h('option', { value: String(v), selected: S.settings.autoLock === v }, l)));
     const last = S.settings.lastBackup ? when(S.settings.lastBackup) : 'never';
     openSheet('Settings', (close) => h('div', { class: 'stack' },
@@ -670,7 +670,7 @@
         let data; try { data = await unseal(key, vault); } catch { return 'That number + passcode doesn’t open this backup.'; }
         if (atSetup) {
           localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
-          session = { key, salt: unb64(vault.salt), iter: vault.iter }; S = migrate(data); view = 'sell'; render(true);
+          session = { key, salt: unb64(vault.salt), iter: vault.iter }; S = migrate(data); view = 'sell'; render(true); keepSession();
           toast('Backup restored');
           return null;
         }
@@ -719,7 +719,7 @@
         catch { btn.disabled = false; btn.textContent = 'Save'; err.textContent = 'Current number or passcode is wrong.'; return; }
         const salt = crypto.getRandomValues(new Uint8Array(16));
         session = { key: await deriveKey(n2, npass.value, salt, ITER), salt, iter: ITER };
-        save(); await saveChain; close(); toast('Number + passcode updated. Make a fresh backup.');
+        save(); await saveChain; keepSession(); close(); toast('Number + passcode updated. Make a fresh backup.');
       });
       return h('div', { class: 'stack' }, field('Current mobile number', cnum), field('Current passcode', cpass), h('div', { class: 'sep' }),
         field('New mobile number', nnum), field('New passcode', npass), field('Confirm new passcode', npass2), err, btn);
@@ -734,14 +734,47 @@
       h('button', { class: 'btn danger wide', onclick: () => {
         if (inp.value.trim().toUpperCase() !== 'ERASE') { err.textContent = 'Type ERASE to confirm.'; return; }
         localStorage.removeItem(VAULT_KEY); localStorage.removeItem(LOCK_KEY);
-        session = null; S = null; close(); render(true); toast('Erased');
+        session = null; S = null; forgetSession(); close(); render(true); toast('Erased');
       } }, 'Erase everything')));
   }
 
   /* ---------- Lock, unlock, setup ---------- */
   let lockTimer = 0;
   function getLockout() { try { return JSON.parse(localStorage.getItem(LOCK_KEY)) || { fails: 0, until: 0 }; } catch { return { fails: 0, until: 0 }; } }
+  /* Remembered unlock: the (non-extractable) key is kept on the phone so the app stays unlocked
+     for the chosen auto-lock time even if iOS closes it in the background. */
+  function idb(mode, fn) {
+    return new Promise((resolve) => {
+      let req; try { req = indexedDB.open('stocktracker', 1); } catch { resolve(null); return; }
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        try {
+          const tx = req.result.transaction('kv', mode); const r = fn(tx.objectStore('kv'));
+          tx.oncomplete = () => { req.result.close(); resolve(r ? r.result : null); };
+          tx.onerror = tx.onabort = () => { req.result.close(); resolve(null); };
+        } catch { resolve(null); }
+      };
+    });
+  }
+  function keepSession() {
+    if (!S || !session || !(S.settings.autoLock > 0)) return forgetSession();
+    return idb('readwrite', (st) => st.put({ key: session.key, salt: session.salt, iter: session.iter, autoLock: S.settings.autoLock, lastSeen: Date.now() }, 'session'));
+  }
+  function forgetSession() { return idb('readwrite', (st) => st.delete('session')); }
+  async function resumeSession() {
+    const rec = await idb('readonly', (st) => st.get('session'));
+    const vault = readVault();
+    if (!rec || !vault) return;
+    try {
+      if (!(Date.now() - rec.lastSeen < rec.autoLock * 60000)) throw new Error('expired');
+      const data = await unseal(rec.key, vault);
+      session = { key: rec.key, salt: rec.salt, iter: rec.iter }; S = migrate(data);
+      if (S.settings.autoLock !== rec.autoLock) throw new Error('changed');
+    } catch { session = null; S = null; await forgetSession(); }
+  }
   function lockNow() {
+    forgetSession();
     session = null; S = null; chargeTo = null; view = 'sell';
     closeAllSheets(); $('#toast-root').replaceChildren(); render(true);
   }
@@ -770,7 +803,7 @@
         localStorage.removeItem(LOCK_KEY);
         session = { key, salt, iter: vault.iter }; S = migrate(data); view = 'sell';
         if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-        render(true);
+        render(true); keepSession();
         backupReminder();
       } catch {
         const lk = getLockout(); lk.fails += 1;
@@ -804,7 +837,7 @@
       session = { key: await deriveKey(n, pass.value, salt, ITER), salt, iter: ITER };
       S = freshState(); save(); await saveChain;
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-      view = 'sell'; render(true);
+      view = 'sell'; render(true); keepSession();
       toast('All set! Tap a drink each time one sells.');
     };
     btn.addEventListener('click', go); pass2.addEventListener('keydown', onEnter(go));
@@ -821,10 +854,12 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       hiddenAt = Date.now();
+      if (S && S.settings.autoLock > 0) keepSession();
       if (S && S.settings.autoLock === 0) lockNow();
       if (pendingReload) { saveChain.then(() => location.reload()); }
     } else {
       if (S && hiddenAt && Date.now() - hiddenAt >= S.settings.autoLock * 60000) lockNow();
+      else if (S) keepSession();
       if (reg) reg.update().catch(() => {});
     }
   });
@@ -838,5 +873,5 @@
     });
   }
 
-  render(true);
+  resumeSession().catch(() => {}).then(() => { render(true); if (S) { keepSession(); backupReminder(); } });
 })();
