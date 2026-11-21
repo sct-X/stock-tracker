@@ -1,7 +1,7 @@
 'use strict';
 /* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.1.1';
+  const VERSION = '1.3.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -134,21 +134,21 @@
   const activeDrinks = () => S.drinks.filter((d) => !d.archived);
 
   function stats() {
-    const st = { sold: {}, soldAmt: {}, stock: {}, stocked: {}, tabBal: {}, fund: 0, takings: 0, spent: 0, owed: 0, credit: 0, todayQty: 0, todayAmt: 0 };
+    const st = { sold: {}, soldAmt: {}, tabBal: {}, fund: 0, takings: 0, spent: 0, owed: 0, credit: 0, todayQty: 0, todayAmt: 0 };
     const today = startOfToday();
     const add = (o, k, n) => { o[k] = (o[k] || 0) + n; };
     for (const e of S.log) {
       switch (e.type) {
         case 'sale':
-          add(st.sold, e.drinkId, e.qty); add(st.soldAmt, e.drinkId, e.amount); add(st.stock, e.drinkId, -e.qty);
+          add(st.sold, e.drinkId, e.qty); add(st.soldAmt, e.drinkId, e.amount);
           st.takings += e.amount;
           if (e.tabId) add(st.tabBal, e.tabId, -e.amount); else st.fund += e.amount;
           if (e.t >= today) { st.todayQty += e.qty; st.todayAmt += e.amount; }
           break;
         case 'pay': add(st.tabBal, e.tabId, e.amount); st.fund += e.amount; break;
+        case 'charge': add(st.tabBal, e.tabId, -e.amount); break;
         case 'cashout': st.fund -= e.amount; st.spent += e.amount; break;
         case 'cashin': st.fund += e.amount; break;
-        case 'restock': case 'adjust': add(st.stock, e.drinkId, e.qty); st.stocked[e.drinkId] = true; break;
       }
     }
     for (const v of Object.values(st.tabBal)) { if (v < 0) st.owed -= v; else st.credit += v; }
@@ -166,8 +166,8 @@
     root.replaceChildren(el);
     toastTimer = setTimeout(() => el.remove(), undo ? 6000 : 3000);
   }
-  function openSheet(title, body) {
-    const back = h('div', { class: 'sheet-back' });
+  function openSheet(title, body, instant) {
+    const back = h('div', { class: 'sheet-back' + (instant ? ' open instant' : '') });
     const close = () => { back.classList.remove('open'); setTimeout(() => back.remove(), 220); };
     back.addEventListener('click', (e) => { if (e.target === back) close(); });
     back.append(h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -232,11 +232,10 @@
   }
   function drinkCard(d, st) {
     const sold = st.sold[d.id] || 0;
-    const left = st.stocked[d.id] ? (st.stock[d.id] || 0) : null;
-    return h('button', { class: 'drink' + (left !== null && left <= 0 ? ' out' : ''), style: { '--c': d.color }, 'data-id': d.id, onclick: () => sell(d) },
+    return h('button', { class: 'drink', style: { '--c': d.color }, 'data-id': d.id, onclick: () => sell(d) },
       h('span', { class: 'dname' }, d.name), h('span', { class: 'dsize' }, d.size || ''),
       h('span', { class: 'dprice' }, money(d.price)),
-      h('span', { class: 'dmeta' }, sold + ' sold' + (left === null ? '' : left > 0 ? ' · ' + left + ' left' : ' · out of stock')));
+      h('span', { class: 'dmeta' }, sold + ' sold'));
   }
   function sell(d) {
     const tab = chargeTo && tabById(chargeTo);
@@ -286,9 +285,10 @@
       return h('div', { class: 'stack' }, field('Who is it?', input), err, h('button', { class: 'btn primary wide', onclick: go }, 'Add tab'));
     });
   }
-  function openTab(t) {
+  function openTab(t, instant) {
     const bal = stats().tabBal[t.id] || 0;
     const custom = h('input', { class: 'input', inputMode: 'decimal', placeholder: 'Other $', autocomplete: 'off' });
+    const chargeIn = h('input', { class: 'input', inputMode: 'decimal', placeholder: 'Other $', autocomplete: 'off' });
     const err = h('p', { class: 'err' });
     const entries = S.log.filter((e) => e.tabId === t.id).slice(-25).reverse();
     openSheet(t.name, (close) => {
@@ -303,6 +303,20 @@
         h('div', { class: 'balance-big' }, h('span', { class: 'k' }, bal < 0 ? 'Owes you' : bal > 0 ? 'Credit (paid ahead)' : 'Balance'),
           h('b', { class: bal < 0 ? 'owe' : bal > 0 ? 'cred' : '' }, money(Math.abs(bal))),
           h('span', { class: 'small' }, bal > 0 ? 'Their next drinks come off this credit.' : bal < 0 ? 'Record a payment when they pay you.' : 'Nothing owing.')),
+        h('div', { class: 'label' }, 'Put a drink on their tab (pay later)'),
+        h('div', { class: 'stack' },
+          h('div', { class: 'tab-drinks' }, activeDrinks().map((d) => h('button', { class: 'tab-drink', style: { '--c': d.color }, onclick: () => {
+            const e = addEntry({ type: 'sale', drinkId: d.id, name: d.name, qty: 1, amount: d.price, tabId: t.id, tabName: t.name });
+            closeAllSheets(); render(); openTab(t, true);
+            toast(d.name + ' · ' + money(d.price) + ' → ' + t.name + '’s tab', () => { removeEntry(e.id); if (document.querySelector('.sheet-back')) { closeAllSheets(); openTab(t, true); } });
+          } }, h('span', { class: 'dot' }), d.name, h('b', null, money(d.price))))),
+          h('div', { class: 'row2' }, chargeIn, h('button', { class: 'btn', onclick: () => {
+            const c = parseMoney(chargeIn.value);
+            if (!c) { err.textContent = 'Enter an amount to charge.'; return; }
+            const e = addEntry({ type: 'charge', tabId: t.id, tabName: t.name, amount: c });
+            close(); render();
+            toast(money(c) + ' charged to ' + t.name + '’s tab', () => removeEntry(e.id));
+          } }, 'Charge amount'))),
         h('div', { class: 'label' }, 'Record a payment'),
         h('div', { class: 'stack' },
           bal < 0 ? h('button', { class: 'btn primary wide', onclick: () => pay(-bal) }, 'Paid it all off · ' + money(-bal)) : null,
@@ -319,7 +333,7 @@
             close();
             if (await ask('Remove ' + t.name + '?', 'Their history stays in the Money page.', 'Remove tab', true)) { t.archived = true; save(); render(); }
           } }, 'Remove tab')));
-    });
+    }, instant);
   }
   function renameTab(t) {
     const input = h('input', { class: 'input', value: t.name, autocomplete: 'off', autocapitalize: 'words', maxLength: 40 });
@@ -337,6 +351,7 @@
     switch (e.type) {
       case 'sale': return { title: dn + (e.qty > 1 ? ' ×' + e.qty : ''), sub: e.tabId ? 'On ' + tn + '’s tab' : 'Sold · paid', amt: e.tabId ? money(e.amount) : '+' + money(e.amount), cls: e.tabId ? 'dim' : 'pos' };
       case 'pay': return { title: tn + ' paid', sub: 'Tab payment', amt: '+' + money(e.amount), cls: 'pos' };
+      case 'charge': return { title: 'Charged to ' + tn, sub: e.note || 'Added to tab · pay later', amt: money(e.amount), cls: 'dim' };
       case 'cashout': return { title: 'Cash out', sub: e.note || 'Spent from the kitty', amt: '−' + money(e.amount), cls: 'neg' };
       case 'cashin': return { title: 'Money added', sub: e.note || 'Added to the kitty', amt: '+' + money(e.amount), cls: 'pos' };
       case 'restock': return { title: 'Restocked ' + dn, sub: '+' + e.qty + ' added', amt: '', cls: 'dim' };
@@ -384,7 +399,7 @@
   }
 
   /* ---------- History (searchable, by date) ---------- */
-  const sortedLog = () => S.log.slice().sort((a, b) => b.t - a.t);
+  const sortedLog = () => S.log.filter((e) => e.type !== 'restock' && e.type !== 'adjust').sort((a, b) => b.t - a.t);
   const pad2 = (n) => String(n).padStart(2, '0');
   const dayKey = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
   const timeOf = (t) => new Date(t).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
@@ -393,7 +408,7 @@
     if (t >= startOfToday() - 86400000) return 'Yesterday';
     return new Date(t).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
-  const TYPE_FILTERS = [['all', 'All'], ['sale', 'Sales'], ['pay', 'Tab payments'], ['cash', 'Cash in/out'], ['stock', 'Stock']];
+  const TYPE_FILTERS = [['all', 'All'], ['sale', 'Sales'], ['pay', 'Tabs'], ['cash', 'Cash in/out']];
   const RANGES = [['all', 'All time'], ['today', 'Today'], ['week', 'Last 7 days'], ['month', 'This month'], ['custom', 'Pick dates']];
   const HQ = { text: '', type: 'all', range: 'all', from: '', to: '' };
   function searchText(e) {
@@ -416,9 +431,8 @@
     return sortedLog().filter((e) => {
       if (e.t < lo || e.t > hi) return false;
       if (HQ.type === 'sale' && e.type !== 'sale') return false;
-      if (HQ.type === 'pay' && e.type !== 'pay') return false;
+      if (HQ.type === 'pay' && e.type !== 'pay' && e.type !== 'charge' && !(e.type === 'sale' && e.tabId)) return false;
       if (HQ.type === 'cash' && e.type !== 'cashout' && e.type !== 'cashin') return false;
-      if (HQ.type === 'stock' && e.type !== 'restock' && e.type !== 'adjust') return false;
       if (words.length) { const s = searchText(e); if (!words.every((w) => s.includes(w))) return false; }
       return true;
     });
@@ -478,7 +492,7 @@
   function openEntry(e) {
     const x = describe(e);
     const dt = h('input', { class: 'input', type: 'datetime-local', value: toLocalInput(e.t), max: toLocalInput(Date.now()) });
-    const hasNote = e.type === 'cashout' || e.type === 'cashin' || e.type === 'pay';
+    const hasNote = ['cashout', 'cashin', 'pay', 'charge'].includes(e.type);
     const note = h('input', { class: 'input', value: e.note || '', placeholder: 'Optional', autocomplete: 'off', maxLength: 80 });
     const err = h('p', { class: 'err' });
     openSheet(x.title, (close) => h('div', { class: 'stack' },
@@ -502,7 +516,7 @@
   }
   async function exportCSV(list) {
     const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const TYPE = { sale: 'Sale', pay: 'Tab payment', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
+    const TYPE = { sale: 'Sale', pay: 'Tab payment', charge: 'Tab charge', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
     const rows = [['Date', 'Time', 'Type', 'Item', 'Tab', 'Qty', 'Amount', 'Note']];
     for (const e of list.slice().sort((a, b) => a.t - b.t)) {
       const d = drinkById(e.drinkId); const t = tabById(e.tabId);
@@ -547,16 +561,15 @@
       h('button', { class: 'btn primary wide', onclick: () => editDrink(null) }, '+ Add a drink'),
       h('div', { class: 'label' }, 'On the sell page'),
       active.length ? h('div', { class: 'list' }, active.map((d) => {
-        const left = st.stocked[d.id] ? (st.stock[d.id] || 0) : null;
         return h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
           h('button', { class: 'grow', onclick: () => editDrink(d) },
-            h('span', { class: 't' }, d.name), h('span', { class: 's' }, [d.size, money(d.price), (st.sold[d.id] || 0) + ' sold', left === null ? 'stock not set' : left + ' left'].filter(Boolean).join(' · '))),
-          h('button', { class: 'mini', onclick: () => restockSheet(d) }, 'Restock'));
+            h('span', { class: 't' }, d.name), h('span', { class: 's' }, [d.size, money(d.price), (st.sold[d.id] || 0) + ' sold'].filter(Boolean).join(' · '))),
+          h('button', { class: 'mini', onclick: () => editDrink(d) }, 'Edit'));
       })) : h('p', { class: 'empty' }, 'No drinks on the sell page.'),
       hidden.length ? [h('div', { class: 'label' }, 'Hidden'), h('div', { class: 'list' }, hidden.map((d) => h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name), h('span', { class: 's' }, (st.sold[d.id] || 0) + ' sold')),
         h('button', { class: 'mini', onclick: () => { d.archived = false; save(); render(); } }, 'Show'))))] : null,
-      h('p', { class: 'hint' }, 'Tap a drink to change its name, size, price or colour. Restock after a shopping run to keep the “left” count right.'),
+      h('p', { class: 'hint' }, 'Tap a drink to change its name, size, price or colour.'),
     ];
   }
   function editDrink(d) {
@@ -565,7 +578,6 @@
     const name = h('input', { class: 'input', value: d ? d.name : '', placeholder: 'e.g. Pepsi Max', autocomplete: 'off', autocapitalize: 'words', maxLength: 40 });
     const size = h('input', { class: 'input', value: d ? d.size : '', placeholder: 'e.g. 375mL', autocomplete: 'off', maxLength: 16 });
     const price = h('input', { class: 'input', inputMode: 'decimal', value: d ? (d.price / 100).toFixed(2) : '', placeholder: '2.00', autocomplete: 'off' });
-    const stock = h('input', { class: 'input', inputMode: 'numeric', placeholder: 'Leave blank to skip', autocomplete: 'off' });
     const err = h('p', { class: 'err' });
     const sw = h('div', { class: 'swatches' });
     const drawSw = () => sw.replaceChildren(...COLORS.map((c) => h('button', { class: 'sw' + (c === color ? ' on' : ''), style: { '--c': c }, 'aria-label': 'Colour', onclick: () => { color = c; drawSw(); } })));
@@ -578,8 +590,6 @@
         if (isNew) {
           const nd = { id: uid(), name: n, size: size.value.trim(), price: p, color, archived: false };
           S.drinks.push(nd);
-          const q = parseInt(stock.value, 10);
-          if (q > 0) S.log.push({ id: uid(), t: Date.now(), type: 'restock', drinkId: nd.id, name: n, qty: q });
           toast(n + ' added to the sell page');
         } else { Object.assign(d, { name: n, size: size.value.trim(), price: p, color }); toast('Saved'); }
         save(); close(); render();
@@ -591,46 +601,12 @@
       };
       return h('div', { class: 'stack' },
         field('Name', name), h('div', { class: 'row2' }, field('Size', size), field('Price ($)', price)),
-        isNew ? field('How many do you have now? (optional)', stock) : null,
         h('div', { class: 'field' }, h('span', null, 'Colour'), sw), err,
         h('button', { class: 'btn primary wide', onclick: go }, isNew ? 'Add drink' : 'Save'),
         isNew ? null : [
           h('div', { class: 'row2' }, h('button', { class: 'btn', onclick: () => move(-1) }, '↑ Move up'), h('button', { class: 'btn', onclick: () => move(1) }, '↓ Move down')),
           h('button', { class: 'btn danger wide', onclick: () => { d.archived = true; save(); close(); render(); toast(d.name + ' hidden — bring it back from the Drinks page'); } }, 'Hide from sell page')],
         h('p', { class: 'small' }, 'Changing the price only affects new sales. Past sales keep the price they were sold at.'));
-    });
-  }
-  function restockSheet(d) {
-    const st = stats();
-    const cur = st.stocked[d.id] ? (st.stock[d.id] || 0) : null;
-    const qty = h('input', { class: 'input', inputMode: 'numeric', placeholder: 'How many cans?', autocomplete: 'off' });
-    const spent = h('input', { class: 'input', inputMode: 'decimal', placeholder: 'Optional', autocomplete: 'off' });
-    const count = h('input', { class: 'input', inputMode: 'numeric', placeholder: cur === null ? 'e.g. 12' : String(cur), autocomplete: 'off' });
-    const err = h('p', { class: 'err' });
-    openSheet('Restock ' + d.name, (close) => {
-      const go = () => {
-        const q = parseInt(qty.value, 10); const c = parseMoney(spent.value);
-        if (!(q > 0)) { err.textContent = 'How many did you add?'; return; }
-        S.log.push({ id: uid(), t: Date.now(), type: 'restock', drinkId: d.id, name: d.name, qty: q });
-        if (c) S.log.push({ id: uid(), t: Date.now(), type: 'cashout', amount: c, note: 'Restock: ' + d.name + ' ×' + q });
-        save(); close(); render(); toast('+' + q + ' ' + d.name + (c ? ' · ' + money(c) + ' cashed out' : ''));
-      };
-      const setCount = () => {
-        const n = parseInt(count.value, 10);
-        if (!(n >= 0)) { err.textContent = 'Type how many are in the fridge right now.'; return; }
-        const delta = n - (cur || 0);
-        S.log.push({ id: uid(), t: Date.now(), type: 'adjust', drinkId: d.id, name: d.name, qty: delta, to: n });
-        save(); close(); render(); toast(d.name + ' count set to ' + n);
-      };
-      const qb = (n) => h('button', { class: 'btn', onclick: () => { qty.value = String((parseInt(qty.value, 10) || 0) + n); } }, '+' + n);
-      return h('div', { class: 'stack' },
-        h('p', { class: 'small' }, cur === null ? 'Stock not tracked yet for this drink.' : 'Currently ' + cur + ' left.'),
-        h('div', { class: 'row4' }, qb(1), qb(6), qb(12), qb(24)),
-        field('Cans added', qty), field('Spent on them ($) — takes it out of the kitty', spent), err,
-        h('button', { class: 'btn primary wide', onclick: go }, 'Add stock'),
-        h('div', { class: 'sep' }),
-        field('Or correct the count (what’s in the fridge now)', count),
-        h('button', { class: 'btn wide', onclick: setCount }, 'Set count'));
     });
   }
   const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView, drinks: drinksView };

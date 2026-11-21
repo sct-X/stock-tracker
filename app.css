@@ -250,3 +250,9 @@ input[type=date], input[type=datetime-local] { -webkit-appearance: none; appeara
 .drink.add-drink::before { display: none; }
 .drink.add-drink .plus { width: 44px; height: 44px; border-radius: 22px; background: var(--blue-soft); display: grid; place-items: center; font-size: 28px; font-weight: 600; line-height: 1; }
 .drink.add-drink .dname { font-size: 16px; }
+
+.sheet-back.instant, .sheet-back.instant .sheet { transition: none; }
+.tab-drinks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tab-drink { min-height: 48px; padding: 8px 12px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14.5px; text-align: left; line-height: 1.15; }
+.tab-drink b { margin-left: auto; color: var(--deep); font-weight: 800; }
+.tab-drink:active { transform: scale(.97); background: var(--blue-soft); }
