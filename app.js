@@ -1,20 +1,20 @@
 'use strict';
-/* Stock tracker — everything stays on this phone, encrypted with the mobile number + passcode. */
+/* The Snack Tab — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '1.6.0';
+  const VERSION = '2.0.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
-  const COLORS = ['#F28B82', '#5F6B7A', '#81C995', '#FCAD70', '#8AB4F8', '#6FD3C8', '#C3A6F5', '#F7A8C8', '#F9D46B', '#C8A27A'];
+  const COLORS = ['#E2553A', '#4A3A33', '#5DBB63', '#F59A3C', '#4F93E0', '#2FBFAE', '#9B7BE0', '#F08BB0', '#F5C93C', '#B07A4F'];
   const SEED = [
-    { name: 'Coke', size: '375mL', price: 200, color: '#F28B82' },
-    { name: 'Coke Zero', size: '375mL', price: 200, color: '#5F6B7A' },
-    { name: 'Sprite', size: '375mL', price: 200, color: '#81C995' },
-    { name: 'Fanta', size: '375mL', price: 200, color: '#FCAD70' },
-    { name: 'Red Bull', size: '250mL', price: 300, color: '#8AB4F8' },
-    { name: 'Monster Mango Loco', size: '500mL', price: 450, color: '#6FD3C8' },
+    { name: 'Coke', size: '375mL', price: 200, color: '#E2553A' },
+    { name: 'Coke Zero', size: '375mL', price: 200, color: '#4A3A33' },
+    { name: 'Sprite', size: '375mL', price: 200, color: '#5DBB63' },
+    { name: 'Fanta', size: '375mL', price: 200, color: '#F59A3C' },
+    { name: 'Red Bull', size: '250mL', price: 300, color: '#4F93E0' },
+    { name: 'Monster Mango Loco', size: '500mL', price: 450, color: '#2FBFAE' },
   ];
-  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Money', history: 'History', drinks: 'Drinks' };
+  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Money', history: 'History', change: 'Change' };
 
   /* ---------- helpers ---------- */
   const $ = (s, r = document) => r.querySelector(s);
@@ -37,6 +37,7 @@
     gear: [['path', { d: 'M4 7h9M17 7h3M4 17h3M11 17h9' }], ['circle', { cx: 15, cy: 7, r: 2 }], ['circle', { cx: 9, cy: 17, r: 2 }]],
     can: [['rect', { x: 7, y: 3, width: 10, height: 18, rx: 2.5 }], ['path', { d: 'M7 7.5h10M7 16.5h10' }]],
     people: [['circle', { cx: 9, cy: 8, r: 3.5 }], ['path', { d: 'M2.5 20a6.5 6.5 0 0 1 13 0' }], ['circle', { cx: 17.5, cy: 9, r: 2.5 }], ['path', { d: 'M16.5 14.2A5 5 0 0 1 21.5 19.5' }]],
+    coins: [['circle', { cx: 9, cy: 9, r: 6 }], ['path', { d: 'M15.4 9.3A6 6 0 1 1 9.3 15.4' }]],
     wallet: [['rect', { x: 3, y: 6, width: 18, height: 14, rx: 2.5 }], ['path', { d: 'M3 10h18M7 3.5h10' }], ['circle', { cx: 16.5, cy: 15, r: 1.2 }]],
     box: [['path', { d: 'M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z' }], ['path', { d: 'M3.5 7.5 12 11.5l8.5-4M12 11.5v9' }]],
     clock: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 7v5l3.2 2' }]],
@@ -117,6 +118,8 @@
     d.drinks ||= []; d.tabs ||= []; d.log ||= []; d.settings ||= {};
     if (typeof d.settings.autoLock !== 'number') d.settings.autoLock = 15;
     d.settings.lastBackup ||= 0;
+    const OLD = { '#F28B82': '#E2553A', '#5F6B7A': '#4A3A33', '#81C995': '#5DBB63', '#FCAD70': '#F59A3C', '#8AB4F8': '#4F93E0', '#6FD3C8': '#2FBFAE', '#C3A6F5': '#9B7BE0', '#F7A8C8': '#F08BB0', '#F9D46B': '#F5C93C', '#C8A27A': '#B07A4F' };
+    for (const dr of d.drinks) if (OLD[dr.color]) dr.color = OLD[dr.color];
     return d;
   }
   function save() {
@@ -204,7 +207,7 @@
           h('button', { class: 'icon-btn', onclick: lockNow, 'aria-label': 'Lock' }, icon('lock')),
           h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, icon('gear'))))),
       h('main', { class: 'main' }, VIEWS[view](st)),
-      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
+      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['change', 'Change', 'coins'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
         h('button', { class: view === v ? 'on' : '', onclick: () => { view = v; histLimit = 40; render(true); } }, icon(ic), label))));
     window.scrollTo(0, resetScroll ? 0 : y);
   }
@@ -351,6 +354,8 @@
     switch (e.type) {
       case 'sale': return { title: dn + (e.qty > 1 ? ' ×' + e.qty : ''), sub: e.tabId ? 'On ' + tn + '’s tab' : 'Sold · paid', amt: e.tabId ? money(e.amount) : '+' + money(e.amount), cls: e.tabId ? 'dim' : 'pos' };
       case 'pay': return { title: tn + ' paid', sub: 'Tab payment', amt: '+' + money(e.amount), cls: 'pos' };
+      case 'iou': return { title: e.dir === 'owe' ? 'You owe the kitty' : 'Kitty owes you', sub: e.note || 'Change', amt: (e.dir === 'owe' ? '+' : '−') + money(e.amount), cls: 'dim' };
+      case 'settle': return { title: 'Settled up with the kitty', sub: e.amount > 0 ? 'Put ' + money(e.amount) + ' in' : 'Took ' + money(-e.amount) + ' out', amt: '', cls: 'dim' };
       case 'charge': return { title: 'Charged to ' + tn, sub: e.note || 'Added to tab · pay later', amt: money(e.amount), cls: 'dim' };
       case 'cashout': return { title: 'Cash out', sub: e.note || 'Spent from the kitty', amt: '−' + money(e.amount), cls: 'neg' };
       case 'cashin': return { title: 'Money added', sub: e.note || 'Added to the kitty', amt: '+' + money(e.amount), cls: 'pos' };
@@ -370,6 +375,49 @@
         if (before) before();
         if (await ask('Delete this entry?', x.title + ' — ' + when(e.t) + '. Totals will update.', 'Delete', true)) { removeEntry(e.id); toast('Entry deleted'); }
       } }, icon('trash')));
+  }
+  /* ---------- Change: money between her and the cash box (never touches the kitty total) ---------- */
+  const changeBal = () => S.log.reduce((n, e) => e.type === 'iou' ? n + (e.dir === 'owe' ? e.amount : -e.amount) : e.type === 'settle' ? n - e.amount : n, 0);
+  function changeView() {
+    const bal = changeBal();
+    const entries = sortedLog().filter((e) => e.type === 'iou' || e.type === 'settle');
+    return [
+      h('section', { class: 'change-big ' + (bal > 0 ? 'owe' : bal < 0 ? 'owed' : '') },
+        h('span', { class: 'k' }, bal > 0 ? 'You owe the kitty' : bal < 0 ? 'The kitty owes you' : 'You and the kitty are'),
+        h('strong', null, bal ? money(Math.abs(bal)) : 'All square'),
+        bal ? h('span', { class: 'todo' }, bal > 0 ? 'Put ' + money(bal) + ' into the kitty' : 'Take ' + money(-bal) + ' out of the kitty') : null),
+      h('div', { class: 'row2', style: { 'margin-top': '14px' } },
+        h('button', { class: 'btn', onclick: () => iouSheet('owe') }, 'I owe kitty'),
+        h('button', { class: 'btn', onclick: () => iouSheet('owed') }, 'Kitty owes me')),
+      bal ? h('button', { class: 'btn primary wide', style: { 'margin-top': '12px' }, onclick: () => {
+        const e = addEntry({ type: 'settle', amount: bal }); render();
+        toast('Settled up · ' + money(Math.abs(bal)), () => removeEntry(e.id));
+      } }, 'Settled up · ' + money(Math.abs(bal))) : null,
+      h('div', { class: 'label' }, 'Recent'),
+      entries.length ? h('div', { class: 'list' }, entries.slice(0, 30).map((e) => historyRow(e))) : h('p', { class: 'empty' }, 'Nothing yet.'),
+      h('p', { class: 'hint' }, 'Only tracks money between you and the cash box, like a PayID paid to you or shopping you paid for yourself. Kitty totals don’t change.'),
+    ];
+  }
+  function iouSheet(dir) {
+    const amt = h('input', { class: 'input', inputMode: 'decimal', placeholder: '0.00', autocomplete: 'off' });
+    const note = h('input', { class: 'input', placeholder: dir === 'owe' ? 'Sam paid me by PayID' : 'Costco run', autocomplete: 'off', maxLength: 80 });
+    const err = h('p', { class: 'err' });
+    const quick = [...new Set([...activeDrinks().map((d) => d.price), 500, 1000, 2000])].sort((a, b) => a - b).slice(0, 8);
+    openSheet(dir === 'owe' ? 'I owe the kitty' : 'The kitty owes me', (close) => {
+      const go = () => {
+        const c = parseMoney(amt.value);
+        if (!c) { err.textContent = 'Enter an amount.'; return; }
+        const e = addEntry({ type: 'iou', dir, amount: c, note: note.value.trim() || null });
+        close(); render();
+        toast((dir === 'owe' ? 'You owe the kitty ' : 'Kitty owes you ') + money(c), () => removeEntry(e.id));
+      };
+      amt.addEventListener('keydown', onEnter(go)); note.addEventListener('keydown', onEnter(go));
+      return h('div', { class: 'stack' },
+        h('p', { class: 'small' }, dir === 'owe' ? 'Money you’re holding that belongs in the kitty, e.g. someone paid you by PayID or you had no change.' : 'Money you paid from your own pocket that the kitty should pay back.'),
+        h('div', { class: 'row4' }, quick.map((c) => h('button', { class: 'btn', onclick: () => { amt.value = (c / 100).toFixed(2); } }, money(c)))),
+        field('Amount ($)', amt), field('What for? (optional)', note), err,
+        h('button', { class: 'btn primary wide', onclick: go }, 'Save'));
+    });
   }
   function moneyView(st) {
     const sold = S.drinks.filter((d) => st.sold[d.id]);
@@ -408,7 +456,7 @@
     if (t >= startOfToday() - 86400000) return 'Yesterday';
     return new Date(t).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
-  const TYPE_FILTERS = [['all', 'All'], ['sale', 'Sales'], ['pay', 'Tabs'], ['cash', 'Cash in/out']];
+  const TYPE_FILTERS = [['all', 'All'], ['sale', 'Sales'], ['pay', 'Tabs'], ['cash', 'Cash in/out'], ['change', 'Change']];
   const RANGES = [['all', 'All time'], ['today', 'Today'], ['week', 'Last 7 days'], ['month', 'This month'], ['custom', 'Pick dates']];
   const HQ = { text: '', type: 'all', range: 'all', from: '', to: '' };
   function searchText(e) {
@@ -433,6 +481,7 @@
       if (HQ.type === 'sale' && e.type !== 'sale') return false;
       if (HQ.type === 'pay' && e.type !== 'pay' && e.type !== 'charge' && !(e.type === 'sale' && e.tabId)) return false;
       if (HQ.type === 'cash' && e.type !== 'cashout' && e.type !== 'cashin') return false;
+      if (HQ.type === 'change' && e.type !== 'iou' && e.type !== 'settle') return false;
       if (words.length) { const s = searchText(e); if (!words.every((w) => s.includes(w))) return false; }
       return true;
     });
@@ -516,7 +565,7 @@
   }
   async function exportCSV(list) {
     const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const TYPE = { sale: 'Sale', pay: 'Tab payment', charge: 'Tab charge', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
+    const TYPE = { sale: 'Sale', pay: 'Tab payment', charge: 'Tab charge', iou: 'Change', settle: 'Settled with kitty', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
     const rows = [['Date', 'Time', 'Type', 'Item', 'Tab', 'Qty', 'Amount', 'Note']];
     for (const e of list.slice().sort((a, b) => a.t - b.t)) {
       const d = drinkById(e.drinkId); const t = tabById(e.tabId);
@@ -526,7 +575,7 @@
     const text = rows.map((r) => r.map(q).join(',')).join('\n');
     const file = new File([text], 'stock-tracker-history-' + dayKey(Date.now()) + '.csv', { type: 'text/csv' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'Stock tracker history' }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+      try { await navigator.share({ files: [file], title: 'The Snack Tab history' }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
     }
     const url = URL.createObjectURL(file);
     const a = h('a', { href: url, download: file.name }); document.body.append(a); a.click(); a.remove();
@@ -606,7 +655,7 @@
         h('p', { class: 'small' }, 'Changing the price only affects new sales. Past sales keep the price they were sold at.'));
     });
   }
-  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView };
+  const VIEWS = { sell: sellView, tabs: tabsView, money: moneyView, history: historyView, change: changeView };
 
   /* ---------- Settings ---------- */
   function openSettings() {
@@ -625,7 +674,7 @@
       h('div', { class: 'sep' }),
       h('button', { class: 'btn wide', onclick: () => { close(); lockNow(); } }, 'Lock now'),
       h('button', { class: 'btn danger wide', onclick: () => { close(); eraseSheet(); } }, 'Erase everything'),
-      h('p', { class: 'small' }, 'Stock tracker v' + VERSION + '. Your data is stored only on this phone, encrypted. Nothing is sent anywhere.')));
+      h('p', { class: 'small' }, 'The Snack Tab v' + VERSION + '. Your data is stored only on this phone, encrypted. Nothing is sent anywhere.')));
   }
   const FORTNIGHT = 14 * 86400000;
   const backupDue = () => S.log.length > 0 && Date.now() - Math.max(S.settings.lastBackup || 0, S.created || 0) > FORTNIGHT;
@@ -645,11 +694,11 @@
     const text = localStorage.getItem(VAULT_KEY);
     if (!text) return;
     const d = new Date(); const pad = (n) => String(n).padStart(2, '0');
-    const name = 'stock-tracker-backup-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
+    const name = 'snack-tab-backup-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
     const file = new File([text], name, { type: 'application/json' });
     const mark = () => { if (S) { S.settings.lastBackup = Date.now(); save(); render(); } };
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'Stock tracker backup' }); mark(); toast('Backup saved'); return; }
+      try { await navigator.share({ files: [file], title: 'The Snack Tab backup' }); mark(); toast('Backup saved'); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
     const url = URL.createObjectURL(file);
@@ -662,7 +711,7 @@
     inp.addEventListener('change', async () => {
       const f = inp.files && inp.files[0]; if (!f) return;
       let vault; try { vault = JSON.parse(await f.text()); } catch { vault = null; }
-      if (!isVault(vault)) { toast('That file isn’t a Stock tracker backup.'); return; }
+      if (!isVault(vault)) { toast('That file isn’t a Snack Tab backup.'); return; }
       credsSheet('Unlock backup', 'Enter the mobile number and passcode that were in use when this backup was made.', 'Unlock backup', async (num, pass) => {
         const key = await deriveKey(num, pass, unb64(vault.salt), vault.iter);
         let data; try { data = await unseal(key, vault); } catch { return 'That number + passcode doesn’t open this backup.'; }
@@ -777,7 +826,7 @@
     closeAllSheets(); $('#toast-root').replaceChildren(); render(true);
   }
   function hero(sub) {
-    return h('div', { class: 'lock-hero' }, h('img', { src: 'icons/icon-192.png', alt: '' }), h('h1', null, 'Stock tracker'), h('p', null, sub));
+    return h('div', { class: 'lock-hero' }, h('img', { src: 'icons/icon-192.png', alt: '' }), h('h1', null, 'The Snack Tab'), h('p', null, sub));
   }
   function unlockScreen() {
     const num = h('input', { class: 'input', type: 'tel', autocomplete: 'tel', inputMode: 'tel', placeholder: 'Mobile number', 'aria-label': 'Mobile number' });

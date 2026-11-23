@@ -1,4 +1,4 @@
-# Stock tracker
+# The Snack Tab
 
 A small Home Screen app for an office drinks fridge: tap a drink to record a sale, keep tabs for people who pay later or pay ahead, and track the kitty (with cash-outs).
 
