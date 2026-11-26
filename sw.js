@@ -1,5 +1,5 @@
 /* The Snack Tab service worker: works offline, always tries for the newest version first. */
-const CACHE = 'snack-tab-v2.1.0';
+const CACHE = 'snack-tab-v2.1.1';
 const ASSETS = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

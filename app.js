@@ -1,7 +1,7 @@
 'use strict';
 /* The Snack Tab — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -14,7 +14,7 @@
     { name: 'Red Bull', size: '250mL', price: 300, color: '#4F93E0' },
     { name: 'Monster Mango Loco', size: '500mL', price: 450, color: '#2FBFAE' },
   ];
-  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Money', history: 'History', change: 'Change' };
+  const TITLES = { sell: 'Sell', tabs: 'Tabs', money: 'Overview', history: 'History', change: 'Change' };
 
   /* ---------- helpers ---------- */
   const $ = (s, r = document) => r.querySelector(s);
@@ -207,7 +207,7 @@
           h('button', { class: 'icon-btn', onclick: lockNow, 'aria-label': 'Lock' }, icon('lock')),
           h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, icon('gear'))))),
       h('main', { class: 'main' }, VIEWS[view](st)),
-      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['change', 'Change', 'coins'], ['money', 'Money', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
+      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['change', 'Change', 'coins'], ['money', 'Overview', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
         h('button', { class: view === v ? 'on' : '', onclick: () => { view = v; histLimit = 40; render(true); } }, icon(ic), label))));
     window.scrollTo(0, resetScroll ? 0 : y);
   }
@@ -334,7 +334,7 @@
           h('button', { class: 'btn danger', onclick: async () => {
             if (bal !== 0) { err.textContent = 'Settle the balance to zero before removing this tab.'; return; }
             close();
-            if (await ask('Remove ' + t.name + '?', 'Their history stays in the Money page.', 'Remove tab', true)) { t.archived = true; save(); render(); }
+            if (await ask('Remove ' + t.name + '?', 'Their history stays in History.', 'Remove tab', true)) { t.archived = true; save(); render(); }
           } }, 'Remove tab')));
     }, instant);
   }
