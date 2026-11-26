@@ -267,3 +267,6 @@ input[type=date], input[type=datetime-local] { -webkit-appearance: none; appeara
 .lock-card { background: var(--card); border-radius: 22px; padding: 20px; border: var(--edge); box-shadow: 4px 4px 0 var(--ink); display: grid; gap: 14px; }
 .lock-links { display: grid; gap: 4px; margin-top: 16px; }
 .lock-links .btn { min-height: 44px; font-size: 15px; }
+
+.chips.wrap { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
+.tab-drink.on { background: var(--orange); }

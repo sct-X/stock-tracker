@@ -1,7 +1,7 @@
 'use strict';
 /* The Snack Tab — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -34,7 +34,7 @@
   const NS = 'http://www.w3.org/2000/svg';
   const ICONS = {
     lock: [['rect', { x: 5, y: 10.5, width: 14, height: 10, rx: 2.5 }], ['path', { d: 'M8 10.5V8a4 4 0 0 1 8 0v2.5' }]],
-    gear: [['path', { d: 'M4 7h9M17 7h3M4 17h3M11 17h9' }], ['circle', { cx: 15, cy: 7, r: 2 }], ['circle', { cx: 9, cy: 17, r: 2 }]],
+    gear: [['circle', { cx: 12, cy: 12, r: 3 }], ['path', { d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' }]],
     can: [['rect', { x: 7, y: 3, width: 10, height: 18, rx: 2.5 }], ['path', { d: 'M7 7.5h10M7 16.5h10' }]],
     people: [['circle', { cx: 9, cy: 8, r: 3.5 }], ['path', { d: 'M2.5 20a6.5 6.5 0 0 1 13 0' }], ['circle', { cx: 17.5, cy: 9, r: 2.5 }], ['path', { d: 'M16.5 14.2A5 5 0 0 1 21.5 19.5' }]],
     coins: [['circle', { cx: 9, cy: 9, r: 6 }], ['path', { d: 'M15.4 9.3A6 6 0 1 1 9.3 15.4' }]],
@@ -268,7 +268,7 @@
         const bal = st.tabBal[t.id] || 0;
         return h('button', { class: 'li', onclick: () => openTab(t) }, h('span', { class: 'grow' }, h('span', { class: 't' }, t.name)), balPill(bal));
       })) : h('p', { class: 'empty' }, 'No tabs yet. Add a name for anyone who pays later, or pays ahead for a drink tomorrow.'),
-      h('p', { class: 'hint' }, 'To put a drink on someone’s tab, pick their name on the Sell page before tapping the drink.'),
+      h('p', { class: 'hint' }, 'To put a drink on someone’s tab, tap their name above and pick the drink, or on the Sell page pick their name before tapping the drink.'),
     ];
   }
   function newTab(cb) {
@@ -541,12 +541,31 @@
   function openEntry(e) {
     const x = describe(e);
     const dt = h('input', { class: 'input', type: 'datetime-local', value: toLocalInput(e.t), max: toLocalInput(Date.now()) });
-    const hasNote = ['cashout', 'cashin', 'pay', 'charge'].includes(e.type);
+    const hasNote = ['cashout', 'cashin', 'pay', 'charge', 'iou'].includes(e.type);
+    const hasAmt = ['cashout', 'cashin', 'pay', 'charge', 'iou'].includes(e.type);
     const note = h('input', { class: 'input', value: e.note || '', placeholder: 'Optional', autocomplete: 'off', maxLength: 80 });
+    const amt = h('input', { class: 'input', inputMode: 'decimal', value: e.amount != null ? (e.amount / 100).toFixed(2) : '', autocomplete: 'off' });
     const err = h('p', { class: 'err' });
+    // Sales: which drink, and who paid (paid now or a tab)
+    const isSale = e.type === 'sale';
+    let pickDrink = e.drinkId, pickTab = e.tabId || null;
+    const drinkBox = h('div', { class: 'tab-drinks' }), payBox = h('div', { class: 'chips wrap' }), priceNote = h('p', { class: 'small' });
+    const newAmount = () => pickDrink === e.drinkId ? e.amount : ((drinkById(pickDrink) || {}).price || e.amount) * (e.qty || 1);
+    const drawSale = () => {
+      const drinks = S.drinks.filter((d) => !d.archived || d.id === e.drinkId);
+      drinkBox.replaceChildren(...drinks.map((d) => h('button', { class: 'tab-drink' + (d.id === pickDrink ? ' on' : ''), style: { '--c': d.color },
+        onclick: () => { pickDrink = d.id; drawSale(); } }, h('span', { class: 'dot' }), d.name, h('b', null, money(d.price)))));
+      const tabs = S.tabs.filter((t) => !t.archived || t.id === e.tabId).sort((a, b) => a.name.localeCompare(b.name));
+      payBox.replaceChildren(h('button', { class: 'chip' + (!pickTab ? ' on' : ''), onclick: () => { pickTab = null; drawSale(); } }, 'Paid now'),
+        ...tabs.map((t) => h('button', { class: 'chip' + (pickTab === t.id ? ' on' : ''), onclick: () => { pickTab = t.id; drawSale(); } }, t.name + '’s tab')));
+      priceNote.textContent = pickDrink === e.drinkId ? 'Sold for ' + money(e.amount) + '.' : 'Will be ' + money(newAmount()) + ' (current price of ' + (drinkById(pickDrink) || {}).name + ').';
+    };
+    if (isSale) drawSale();
     openSheet(x.title, (close) => h('div', { class: 'stack' },
       h('div', { class: 'balance-big' }, h('span', { class: 'k' }, x.sub), x.amt ? h('b', { class: x.cls === 'pos' ? 'cred' : x.cls === 'neg' ? 'owe' : '' }, x.amt) : null,
         h('span', { class: 'small' }, new Date(e.t).toLocaleString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' }))),
+      isSale ? [h('div', { class: 'field' }, h('span', null, 'Drink'), drinkBox), priceNote, h('div', { class: 'field' }, h('span', null, 'Who paid'), payBox)] : null,
+      hasAmt ? field('Amount ($)', amt) : null,
       field('Date and time', dt),
       hasNote ? field('Note', note) : null,
       err,
@@ -554,15 +573,25 @@
         const t = new Date(dt.value).getTime();
         if (!Number.isFinite(t)) { err.textContent = 'Pick a date and time.'; return; }
         if (t > Date.now() + 60000) { err.textContent = 'That’s in the future.'; return; }
-        e.t = t; if (hasNote) e.note = note.value.trim() || null;
+        let c = null;
+        if (hasAmt) { c = parseMoney(amt.value); if (!c) { err.textContent = 'Enter an amount.'; return; } }
+        e.t = t;
+        if (hasNote) e.note = note.value.trim() || null;
+        if (hasAmt) e.amount = c;
+        if (isSale) {
+          const d = drinkById(pickDrink); const tb = pickTab && tabById(pickTab);
+          e.amount = newAmount(); e.drinkId = pickDrink; e.name = d ? d.name : e.name;
+          e.tabId = tb ? tb.id : null; e.tabName = tb ? tb.name : null;
+        }
         save(); close(); render(); toast('Entry updated');
       } }, 'Save changes'),
       h('button', { class: 'btn danger wide', onclick: async () => {
         close();
         if (await ask('Delete this entry?', x.title + ' — ' + when(e.t) + '. Totals will update.', 'Delete', true)) { removeEntry(e.id); toast('Entry deleted'); }
       } }, 'Delete entry'),
-      h('p', { class: 'small' }, 'Change the date if you’re recording something that happened earlier, e.g. a payment from yesterday.')));
+      h('p', { class: 'small' }, isSale ? 'Fix a sale without losing its date: pick the right drink or who paid, and it stays on the day it happened.' : 'Change the date if you’re recording something that happened earlier, e.g. a payment from yesterday.')));
   }
+
   async function exportCSV(list) {
     const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const TYPE = { sale: 'Sale', pay: 'Tab payment', charge: 'Tab charge', iou: 'Change', settle: 'Settled with kitty', cashout: 'Cash out', cashin: 'Money added', restock: 'Restock', adjust: 'Stock count' };
