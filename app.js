@@ -1,7 +1,7 @@
 'use strict';
 /* The Snack Tab — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '2.1.1';
+  const VERSION = '2.1.2';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -207,7 +207,7 @@
           h('button', { class: 'icon-btn', onclick: lockNow, 'aria-label': 'Lock' }, icon('lock')),
           h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, icon('gear'))))),
       h('main', { class: 'main' }, VIEWS[view](st)),
-      h('nav', { class: 'tabbar' }, [['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['change', 'Change', 'coins'], ['money', 'Overview', 'wallet'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
+      h('nav', { class: 'tabbar' }, [['money', 'Overview', 'wallet'], ['sell', 'Sell', 'can'], ['tabs', 'Tabs', 'people'], ['change', 'Change', 'coins'], ['history', 'History', 'clock']].map(([v, label, ic]) =>
         h('button', { class: view === v ? 'on' : '', onclick: () => { view = v; histLimit = 40; render(true); } }, icon(ic), label))));
     window.scrollTo(0, resetScroll ? 0 : y);
   }
