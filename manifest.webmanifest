@@ -1,7 +1,7 @@
 {
   "name": "The Snack Tab",
   "short_name": "The Snack Tab",
-  "description": "Drinks sold, tabs, change and the kitty.",
+  "description": "Products sold, tabs, change and the kitty.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

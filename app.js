@@ -1,7 +1,7 @@
 'use strict';
 /* The Snack Tab — everything stays on this phone, encrypted with the mobile number + passcode. */
 (() => {
-  const VERSION = '2.1.2';
+  const VERSION = '2.2.0';
   const VAULT_KEY = 'stocktracker.vault.v1';
   const LOCK_KEY = 'stocktracker.lockout.v1';
   const ITER = 600000;
@@ -227,10 +227,10 @@
       h('div', { class: 'label' }, 'Who’s paying?'),
       h('div', { class: 'chips' }, chip('Paid now', null), tabs.map((t) => chip(t.name, t.id, st.tabBal[t.id] || 0)),
         h('button', { class: 'chip add', onclick: () => newTab((id) => { chargeTo = id; render(); }) }, '+ Tab')),
-      target ? h('div', { class: 'charge-note' }, 'Next drink goes on ' + target.name + '’s tab') : null,
+      target ? h('div', { class: 'charge-note' }, 'Next product goes on ' + target.name + '’s tab') : null,
       h('div', { class: 'grid' }, drinks.map((d) => drinkCard(d, st)),
-        h('button', { class: 'drink add-drink', onclick: () => editDrink(null) }, h('span', { class: 'plus' }, '+'), h('span', { class: 'dname' }, 'Add a drink'))),
-      h('p', { class: 'hint' }, 'Tap a drink once for each one sold.'),
+        h('button', { class: 'drink add-drink', onclick: () => editDrink(null) }, h('span', { class: 'plus' }, '+'), h('span', { class: 'dname' }, 'Add a product'))),
+      h('p', { class: 'hint' }, 'Tap a product once for each one sold.'),
     ];
   }
   function drinkCard(d, st) {
@@ -267,8 +267,8 @@
       tabs.length ? h('div', { class: 'list' }, tabs.map((t) => {
         const bal = st.tabBal[t.id] || 0;
         return h('button', { class: 'li', onclick: () => openTab(t) }, h('span', { class: 'grow' }, h('span', { class: 't' }, t.name)), balPill(bal));
-      })) : h('p', { class: 'empty' }, 'No tabs yet. Add a name for anyone who pays later, or pays ahead for a drink tomorrow.'),
-      h('p', { class: 'hint' }, 'To put a drink on someone’s tab, tap their name above and pick the drink, or on the Sell page pick their name before tapping the drink.'),
+      })) : h('p', { class: 'empty' }, 'No tabs yet. Add a name for anyone who pays later, or pays ahead for something tomorrow.'),
+      h('p', { class: 'hint' }, 'To charge on someone’s tab, tap their name above and pick the product purchased, or on the Sell Page, pick their name before tapping the product.'),
     ];
   }
   function newTab(cb) {
@@ -305,8 +305,8 @@
       return h('div', null,
         h('div', { class: 'balance-big' }, h('span', { class: 'k' }, bal < 0 ? 'Owes you' : bal > 0 ? 'Credit (paid ahead)' : 'Balance'),
           h('b', { class: bal < 0 ? 'owe' : bal > 0 ? 'cred' : '' }, money(Math.abs(bal))),
-          h('span', { class: 'small' }, bal > 0 ? 'Their next drinks come off this credit.' : bal < 0 ? 'Record a payment when they pay you.' : 'Nothing owing.')),
-        h('div', { class: 'label' }, 'Put a drink on their tab (pay later)'),
+          h('span', { class: 'small' }, bal > 0 ? 'Their next purchases come off this credit.' : bal < 0 ? 'Record a payment when they pay you.' : 'Nothing owing.')),
+        h('div', { class: 'label' }, 'Put a product on their tab (pay later)'),
         h('div', { class: 'stack' },
           h('div', { class: 'tab-drinks' }, activeDrinks().map((d) => h('button', { class: 'tab-drink', style: { '--c': d.color }, onclick: () => {
             const e = addEntry({ type: 'sale', drinkId: d.id, name: d.name, qty: 1, amount: d.price, tabId: t.id, tabName: t.name });
@@ -349,7 +349,7 @@
 
   /* ---------- Money ---------- */
   function describe(e) {
-    const d = drinkById(e.drinkId); const dn = d ? d.name : (e.name || 'Drink');
+    const d = drinkById(e.drinkId); const dn = d ? d.name : (e.name || 'Product');
     const t = tabById(e.tabId); const tn = t ? t.name : (e.tabName || 'Tab');
     switch (e.type) {
       case 'sale': return { title: dn + (e.qty > 1 ? ' ×' + e.qty : ''), sub: e.tabId ? 'On ' + tn + '’s tab' : 'Sold · paid', amt: e.tabId ? money(e.amount) : '+' + money(e.amount), cls: e.tabId ? 'dim' : 'pos' };
@@ -436,7 +436,7 @@
       h('div', { class: 'row2' },
         h('button', { class: 'btn primary', onclick: () => cashSheet('cashout') }, 'Cash out'),
         h('button', { class: 'btn', onclick: () => cashSheet('cashin') }, 'Add money')),
-      h('h3', { class: 'section' }, 'Sold by drink'),
+      h('h3', { class: 'section' }, 'Sold by product'),
       sold.length ? h('div', { class: 'list' }, sold.map((d) => h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name + (d.archived ? ' (hidden)' : '')), h('span', { class: 's' }, st.sold[d.id] + ' sold')),
         h('span', { class: 'amt' }, money(st.soldAmt[d.id] || 0))))) : h('p', { class: 'empty' }, 'No sales yet.'),
@@ -488,7 +488,7 @@
   }
   function historyView() {
     const results = h('div');
-    const search = h('input', { class: 'input', type: 'search', placeholder: 'Search: name, drink, note, date…', value: HQ.text, autocomplete: 'off', enterKeyHint: 'search' });
+    const search = h('input', { class: 'input', type: 'search', placeholder: 'Search: name, product, note, date…', value: HQ.text, autocomplete: 'off', enterKeyHint: 'search' });
     search.addEventListener('input', () => { HQ.text = search.value; histLimit = 40; fillResults(results); });
     const chipRow = (opts, key) => h('div', { class: 'chips' }, opts.map(([v, l]) =>
       h('button', { class: 'chip' + (HQ[key] === v ? ' on' : ''), onclick: () => { HQ[key] = v; histLimit = 40; render(); } }, l)));
@@ -516,7 +516,7 @@
     }
     const kids = [
       h('div', { class: 'stats' },
-        h('div', { class: 'stat' }, h('span', { class: 'k' }, list.length + (list.length === 1 ? ' entry · ' : ' entries · ') + sold + (sold === 1 ? ' drink sold' : ' drinks sold')), h('b', null, money(sales) + ' sales')),
+        h('div', { class: 'stat' }, h('span', { class: 'k' }, list.length + (list.length === 1 ? ' entry · ' : ' entries · ') + sold + (sold === 1 ? ' product sold' : ' products sold')), h('b', null, money(sales) + ' sales')),
         h('div', { class: 'stat' }, h('span', { class: 'k' }, 'Money in / out'), h('b', null, h('span', { class: 'in' }, '+' + money(moneyIn)), ' ', h('span', { class: 'out' }, '−' + money(moneyOut))))),
     ];
     if (!list.length) kids.push(h('p', { class: 'empty' }, S.log.length ? 'Nothing matches. Try another search or date range.' : 'Nothing recorded yet.'));
@@ -564,7 +564,7 @@
     openSheet(x.title, (close) => h('div', { class: 'stack' },
       h('div', { class: 'balance-big' }, h('span', { class: 'k' }, x.sub), x.amt ? h('b', { class: x.cls === 'pos' ? 'cred' : x.cls === 'neg' ? 'owe' : '' }, x.amt) : null,
         h('span', { class: 'small' }, new Date(e.t).toLocaleString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' }))),
-      isSale ? [h('div', { class: 'field' }, h('span', null, 'Drink'), drinkBox), priceNote, h('div', { class: 'field' }, h('span', null, 'Who paid'), payBox)] : null,
+      isSale ? [h('div', { class: 'field' }, h('span', null, 'Product'), drinkBox), priceNote, h('div', { class: 'field' }, h('span', null, 'Who paid'), payBox)] : null,
       hasAmt ? field('Amount ($)', amt) : null,
       field('Date and time', dt),
       hasNote ? field('Note', note) : null,
@@ -589,7 +589,7 @@
         close();
         if (await ask('Delete this entry?', x.title + ' — ' + when(e.t) + '. Totals will update.', 'Delete', true)) { removeEntry(e.id); toast('Entry deleted'); }
       } }, 'Delete entry'),
-      h('p', { class: 'small' }, isSale ? 'Fix a sale without losing its date: pick the right drink or who paid, and it stays on the day it happened.' : 'Change the date if you’re recording something that happened earlier, e.g. a payment from yesterday.')));
+      h('p', { class: 'small' }, isSale ? 'Fix a sale without losing its date: pick the right product or who paid, and it stays on the day it happened.' : 'Change the date if you’re recording something that happened earlier, e.g. a payment from yesterday.')));
   }
 
   async function exportCSV(list) {
@@ -626,7 +626,7 @@
       amt.addEventListener('keydown', onEnter(go)); note.addEventListener('keydown', onEnter(go));
       setTimeout(() => amt.focus(), 250);
       return h('div', { class: 'stack' },
-        h('p', { class: 'small' }, out ? 'Money you took out of the kitty to spend (restocks, BBQs, events). The kitty total goes down.' : 'Extra money put into the kitty that isn’t a drink sale or tab payment.'),
+        h('p', { class: 'small' }, out ? 'Money you took out of the kitty to spend (restocks, BBQs, events). The kitty total goes down.' : 'Extra money put into the kitty that isn’t a sale or tab payment.'),
         field('Amount ($)', amt), field('What for? (optional)', note), err,
         h('button', { class: 'btn primary wide', onclick: go }, out ? 'Cash out' : 'Add money'));
     });
@@ -636,16 +636,16 @@
   function manageDrinks() {
     const st = stats();
     const active = activeDrinks(); const hidden = S.drinks.filter((d) => d.archived);
-    openSheet('Edit drinks', (close) => h('div', { class: 'stack' },
-      h('button', { class: 'btn primary wide', onclick: () => { close(); editDrink(null); } }, '+ Add a drink'),
+    openSheet('Edit stock', (close) => h('div', { class: 'stack' },
+      h('button', { class: 'btn primary wide', onclick: () => { close(); editDrink(null); } }, '+ Add a product'),
       active.length ? h('div', { class: 'list' }, active.map((d) => h('button', { class: 'li', onclick: () => { close(); editDrink(d); } },
         h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name), h('span', { class: 's' }, [d.size, money(d.price), (st.sold[d.id] || 0) + ' sold'].filter(Boolean).join(' · '))),
-        h('span', { class: 'mini' }, 'Edit')))) : h('p', { class: 'empty' }, 'No drinks on the sell page.'),
+        h('span', { class: 'mini' }, 'Edit')))) : h('p', { class: 'empty' }, 'No products on the sell page.'),
       hidden.length ? [h('div', { class: 'label' }, 'Hidden'), h('div', { class: 'list' }, hidden.map((d) => h('div', { class: 'li' }, h('span', { class: 'dot', style: { '--c': d.color } }),
         h('span', { class: 'grow' }, h('span', { class: 't' }, d.name), h('span', { class: 's' }, (st.sold[d.id] || 0) + ' sold')),
         h('button', { class: 'mini', onclick: () => { d.archived = false; save(); close(); render(); toast(d.name + ' is back on the sell page'); } }, 'Show'))))] : null,
-      h('p', { class: 'small' }, 'Tap a drink to change its name, size, price or colour, reorder it, or hide it.')));
+      h('p', { class: 'small' }, 'Tap a product to change its name, size, price or colour, reorder it, or hide it.')));
   }
   function editDrink(d) {
     const isNew = !d;
@@ -657,7 +657,7 @@
     const sw = h('div', { class: 'swatches' });
     const drawSw = () => sw.replaceChildren(...COLORS.map((c) => h('button', { class: 'sw' + (c === color ? ' on' : ''), style: { '--c': c }, 'aria-label': 'Colour', onclick: () => { color = c; drawSw(); } })));
     drawSw();
-    openSheet(isNew ? 'New drink' : 'Edit drink', (close) => {
+    openSheet(isNew ? 'New product' : 'Edit product', (close) => {
       const go = () => {
         const n = name.value.trim(); const p = parseMoney(price.value);
         if (!n) { err.textContent = 'Give it a name.'; return; }
@@ -677,10 +677,10 @@
       return h('div', { class: 'stack' },
         field('Name', name), h('div', { class: 'row2' }, field('Size', size), field('Price ($)', price)),
         h('div', { class: 'field' }, h('span', null, 'Colour'), sw), err,
-        h('button', { class: 'btn primary wide', onclick: go }, isNew ? 'Add drink' : 'Save'),
+        h('button', { class: 'btn primary wide', onclick: go }, isNew ? 'Add product' : 'Save'),
         isNew ? null : [
           h('div', { class: 'row2' }, h('button', { class: 'btn', onclick: () => move(-1) }, '↑ Move up'), h('button', { class: 'btn', onclick: () => move(1) }, '↓ Move down')),
-          h('button', { class: 'btn danger wide', onclick: () => { d.archived = true; save(); close(); render(); toast(d.name + ' hidden — bring it back in Settings → Edit drinks'); } }, 'Hide from sell page')],
+          h('button', { class: 'btn danger wide', onclick: () => { d.archived = true; save(); close(); render(); toast(d.name + ' hidden — bring it back in Settings → Edit stock'); } }, 'Hide from sell page')],
         h('p', { class: 'small' }, 'Changing the price only affects new sales. Past sales keep the price they were sold at.'));
     });
   }
@@ -694,7 +694,7 @@
     const last = S.settings.lastBackup ? when(S.settings.lastBackup) : 'never';
     openSheet('Settings', (close) => h('div', { class: 'stack' },
       field('Lock the app', sel),
-      h('button', { class: 'btn wide', onclick: () => { close(); manageDrinks(); } }, 'Edit drinks'),
+      h('button', { class: 'btn wide', onclick: () => { close(); manageDrinks(); } }, 'Edit stock'),
       h('button', { class: 'btn wide', onclick: () => { close(); changeCreds(); } }, 'Change number or passcode'),
       h('div', { class: 'sep' }),
       h('button', { class: 'btn primary wide', onclick: exportBackup }, 'Back up now'),
@@ -805,7 +805,7 @@
     const inp = h('input', { class: 'input', placeholder: 'Type ERASE', autocomplete: 'off', autocapitalize: 'characters' });
     const err = h('p', { class: 'err' });
     openSheet('Erase everything?', (close) => h('div', { class: 'stack' },
-      h('p', { class: 'small' }, 'This deletes all drinks, tabs, sales and money records from this phone. It can’t be undone unless you have a backup file.'),
+      h('p', { class: 'small' }, 'This deletes all products, tabs, sales and money records from this phone. It can’t be undone unless you have a backup file.'),
       inp, err,
       h('button', { class: 'btn danger wide', onclick: () => {
         if (inp.value.trim().toUpperCase() !== 'ERASE') { err.textContent = 'Type ERASE to confirm.'; return; }
@@ -914,10 +914,10 @@
       S = freshState(); save(); await saveChain;
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
       view = 'sell'; render(true); keepSession();
-      toast('All set! Tap a drink each time one sells.');
+      toast('All set! Tap a product each time one sells.');
     };
     btn.addEventListener('click', go); pass2.addEventListener('keydown', onEnter(go));
-    return h('div', { class: 'lock' }, hero('Track drinks sold, tabs and the kitty.'),
+    return h('div', { class: 'lock' }, hero('Track products sold, tabs and the kitty.'),
       h('div', { class: 'lock-body' },
         h('div', { class: 'lock-card' },
           h('p', { class: 'small' }, 'Set up your lock. You’ll need both your mobile number and passcode to open the app. Everything stays on this phone, encrypted.'),
